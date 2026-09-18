@@ -11,6 +11,9 @@ static uint32_t bleRemoteTimer = millis();
 static uint8_t bleRemoteSeqnum = 0;
 static bool bleRemoteLogOn = false;
 
+// Defined at the bottom, used when the app connects
+static const char *resetReasonText(esp_reset_reason_t reason);
+
 //
 // Get current connection status
 // (-1 - not connected, 0 - disabled, 1 - connected)

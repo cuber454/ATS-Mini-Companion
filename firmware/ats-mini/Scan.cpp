@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include "Common.h"
 #include "Utils.h"
 #include "Menu.h"
