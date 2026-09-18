@@ -1,0 +1,57 @@
+name: Сборка прошивки
+
+on:
+  push:
+    branches: [ main, a11y-labels, firmware ]
+    paths:
+      - 'firmware/ats-mini/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/ats-mini/**'
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить arduino-cli
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
+            | BINDIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Собрать прошивку
+        working-directory: firmware/ats-mini
+        run: |
+          arduino-cli compile -e --profile esp32s3-ospi \
+            --build-property "compiler.cpp.extra_flags=-DDEBUG=0" \
+            --warnings all
+
+      - name: Склеить образ для прошивки одним файлом
+        run: |
+          BUILD=firmware/ats-mini/build/esp32.esp32.esp32s3
+          ls -la "$BUILD"
+
+          # The esp32 platform may already have produced a merged image
+          if ls "$BUILD"/*.merged.bin >/dev/null 2>&1; then
+            echo "Merged image produced by the build"
+            exit 0
+          fi
+
+          python3 -m pip install --quiet esptool
+          python3 -m esptool --chip esp32s3 merge_bin -o "$BUILD/ats-mini.merged.bin" \
+            --flash_mode qio --flash_freq 80m --flash_size 8MB \
+            0x0     "$BUILD/ats-mini.ino.bootloader.bin" \
+            0x8000  "$BUILD/ats-mini.ino.partitions.bin" \
+            0x10000 "$BUILD/ats-mini.ino.bin"
+          ls -la "$BUILD"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ats-mini-firmware
+          path: firmware/ats-mini/build/esp32.esp32.esp32s3/*.bin
+          if-no-files-found: error

@@ -87,6 +87,11 @@ extern const char *bandModeDesc[];
 extern const FMRegion fmRegions[];
 extern int bandIdx;
 
+// Currently selected memory slot (0-based)
+extern uint8_t memoryIdx;
+// Channel mode: the encoder cycles through the filled memory slots only
+extern bool channelMode;
+
 // These are menu commands
 static inline bool isMenuMode(uint16_t cmd)
 {
@@ -119,6 +124,10 @@ int getCurrentUTCOffset();
 int getTotalUTCOffsets();
 int getTotalFmRegions();
 int getTotalBleModes();
+
+// Channel mode, controlled from the remote
+bool setChannelMode(bool on);
+void clickScan(bool shortPress);
 
 void doSoftMute(int16_t enc);
 void doAgc(int16_t enc);

@@ -10,6 +10,8 @@
 #define SCAN_POLL_TIME    10 // Tuning status polling interval (msecs)
 #define SCAN_POINTS      200 // Number of frequencies to scan
 
+#define SCAN_REPORT_MAX   20 // Number of stations reported to the remote
+
 #define SCAN_OFF    0   // Scanner off, no data
 #define SCAN_RUN    1   // Scanner running
 #define SCAN_DONE   2   // Scanner done, valid data in scanData[]
@@ -131,6 +133,76 @@ static bool scanTickTime()
 
   // Return current scan status
   return(scanStatus==SCAN_RUN);
+}
+
+//
+// Report the stations found by the last scan, strongest first.
+//
+// A station is a group of neighbouring scan points rising above the noise
+// floor by at least a third of the dynamic range seen during the scan; the
+// strongest point of the group is taken as its frequency.
+//
+void scanReportStations()
+{
+  if(scanStatus != SCAN_DONE)
+  {
+    Serial.println("SCAN,END,0");
+    return;
+  }
+
+  Serial.printf("SCAN,BEGIN,%u,%u\r\n", scanStep, scanStartFreq);
+
+  // A flat band means there is nothing to report: no signal stands out
+  if(scanMaxRSSI <= scanMinRSSI + 2)
+  {
+    Serial.println("SCAN,END,0");
+    return;
+  }
+
+  uint8_t threshold = scanMinRSSI + (scanMaxRSSI - scanMinRSSI) / 3;
+
+  // Stations found, kept sorted by signal strength
+  uint16_t freqs[SCAN_REPORT_MAX];
+  uint8_t  rssis[SCAN_REPORT_MAX];
+  uint8_t  snrs[SCAN_REPORT_MAX];
+  uint8_t  count = 0;
+
+  for(uint16_t i=0 ; i<scanCount ; )
+  {
+    // Skip the noise floor
+    if(scanData[i].rssi < threshold)
+    {
+      i++;
+      continue;
+    }
+
+    // Take the strongest point of this group of adjacent points
+    uint16_t best = i;
+    while((i < scanCount) && (scanData[i].rssi >= threshold))
+    {
+      if(scanData[i].rssi > scanData[best].rssi) best = i;
+      i++;
+    }
+
+    // Insert the station, keeping the list sorted by signal strength
+    uint8_t pos = count < SCAN_REPORT_MAX ? count : SCAN_REPORT_MAX - 1;
+    while(pos && (rssis[pos-1] < scanData[best].rssi))
+    {
+      freqs[pos] = freqs[pos-1];
+      rssis[pos] = rssis[pos-1];
+      snrs[pos]  = snrs[pos-1];
+      pos--;
+    }
+    freqs[pos] = scanStartFreq + scanStep * best;
+    rssis[pos] = scanData[best].rssi;
+    snrs[pos]  = scanData[best].snr;
+    if(count < SCAN_REPORT_MAX) count++;
+  }
+
+  for(uint8_t i=0 ; i<count ; i++)
+    Serial.printf("SCAN,F,%u,%u,%u\r\n", freqs[i], rssis[i], snrs[i]);
+
+  Serial.printf("SCAN,END,%u\r\n", count);
 }
 
 //

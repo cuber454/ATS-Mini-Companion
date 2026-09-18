@@ -94,9 +94,9 @@ void blePrintStatus()
   uint16_t tuningCapacitor = rx.getAntennaTuningCapacitor();
 
   // Format status string
-  char statusBuffer[128];
+  char statusBuffer[160];
   snprintf(statusBuffer, sizeof(statusBuffer),
-    "%u,%u,%d,%d,%s,%s,%s,%s,%hu,%hu,%hu,%hu,%hu,%.2f,%hu\r\n",
+    "%u,%u,%d,%d,%s,%s,%s,%s,%hu,%hu,%hu,%hu,%hu,%.2f,%hu,%hu,%hu\r\n",
     VER_APP,
     currentFrequency,
     currentBFO,
@@ -112,7 +112,10 @@ void blePrintStatus()
     remoteSnr,
     tuningCapacitor,
     remoteVoltage,
-    bleRemoteSeqnum
+    bleRemoteSeqnum,
+    // Channel mode and the selected channel (1-based)
+    channelMode ? 1 : 0,
+    channelMode ? memoryIdx + 1 : 0
   );
 
   // Send via BLE

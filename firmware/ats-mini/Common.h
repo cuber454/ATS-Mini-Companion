@@ -171,6 +171,7 @@ static inline bool isSSB() { return(currentMode>FM && currentMode<AM); }
 
 void useBand(const Band *band);
 bool updateBFO(int newBFO, bool wrap = true);
+bool updateFrequency(int newFreq, bool wrap);
 bool doSeek(int16_t enc);
 bool clickFreq(bool shortPress);
 uint8_t doAbout(int16_t enc);
@@ -182,6 +183,7 @@ bool drawBattery(int x, int y);
 
 // Scan.c
 void scanRun(uint16_t centerFreq, uint16_t step);
+void scanReportStations();
 float scanGetRSSI(uint16_t freq);
 float scanGetSNR(uint16_t freq);
 

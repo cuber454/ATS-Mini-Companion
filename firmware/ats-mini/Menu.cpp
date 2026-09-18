@@ -174,6 +174,7 @@ int getTotalModes() { return(ITEM_COUNT(bandModeDesc)); }
 uint8_t memoryIdx = 0;
 Memory memories[MEMORY_COUNT];
 Memory newMemory;
+bool channelMode = false;
 
 int getTotalMemories() { return(ITEM_COUNT(memories)); }
 
@@ -506,7 +507,7 @@ static void clickSeek(bool shortPress)
   if(shortPress) seekMode(true); else currentCmd = CMD_NONE;
 }
 
-static void clickScan(bool shortPress)
+void clickScan(bool shortPress)
 {
   if(shortPress)
   {
@@ -689,16 +690,90 @@ bool tuneToMemory(const Memory *memory)
   return(true);
 }
 
+//
+// Find the next filled memory slot in the given direction, starting from
+// the given slot. Returns -1 when no slot is filled.
+//
+static int findFilledMemory(int from, int dir)
+{
+  int count = getTotalMemories();
+
+  for(int i = 1; i <= count; i++)
+  {
+    int idx = ((from + dir * i) % count + count) % count;
+    if(memories[idx].freq) return(idx);
+  }
+
+  return(-1);
+}
+
 static void doMemory(int16_t enc)
 {
+  // In channel mode only the filled slots are reachable, since the whole
+  // point is to cycle through the channels the user has actually saved
+  if(channelMode && enc)
+  {
+    int idx = findFilledMemory(memoryIdx, enc > 0 ? 1 : -1);
+    if(idx >= 0)
+    {
+      memoryIdx = idx;
+      if(!tuneToMemory(&memories[memoryIdx])) tuneToMemory(&newMemory);
+    }
+    return;
+  }
+
   memoryIdx = wrap_range(memoryIdx, enc, 0, LAST_ITEM(memories));
   if(!tuneToMemory(&memories[memoryIdx])) tuneToMemory(&newMemory);
+}
+
+//
+// Enter or leave channel mode. While it is on, the encoder cycles through
+// the filled memory slots and the encoder button no longer edits them.
+// Returns false when there is nothing to switch to.
+//
+bool setChannelMode(bool on)
+{
+  if(on)
+  {
+    // Land on a filled slot if the current one is empty
+    if(!memories[memoryIdx].freq)
+    {
+      int idx = findFilledMemory(memoryIdx, 1);
+      if(idx < 0) return(false);
+      memoryIdx = idx;
+    }
+
+    // Save the current tuning, to be used for empty slots
+    newMemory.freq = freqToHz(currentFrequency, currentMode) + currentBFO;
+    newMemory.mode = currentMode;
+    newMemory.band = bandIdx;
+
+    channelMode = true;
+    currentCmd  = CMD_MEMORY;
+    if(!tuneToMemory(&memories[memoryIdx])) tuneToMemory(&newMemory);
+  }
+  else
+  {
+    channelMode = false;
+    if(currentCmd == CMD_MEMORY) currentCmd = CMD_NONE;
+  }
+
+  return(true);
 }
 
 static void clickMemory(uint8_t idx, bool shortPress)
 {
   // Must have a valid index
   if(idx>LAST_ITEM(memories)) return;
+
+  // In channel mode the encoder button never edits memories: a short press
+  // does nothing (the channel is already tuned in doMemory()), while a
+  // held press leaves the mode back to normal tuning
+  if(channelMode)
+  {
+    if(!shortPress) setChannelMode(false);
+    return;
+  }
 
   if(shortPress)
   {

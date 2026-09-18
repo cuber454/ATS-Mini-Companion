@@ -208,6 +208,42 @@ static bool remoteSetMemory()
 }
 
 //
+// Tune to the frequency given by the remote. The value is in the units of
+// the current band: kilohertz for AM/SSB, 10 kHz for FM. The number must be
+// terminated with a newline.
+//
+static bool remoteSetFrequency()
+{
+  long int freq = readSerialInteger();
+
+  // Consume the terminating newline, if any
+  if(Serial.peek() == '\r' || Serial.peek() == '\n') Serial.read();
+
+  if(freq <= 0 || freq > 0xFFFF)
+    return showError("Invalid frequency");
+
+  if(!isFreqInBand(getCurrentBand(), (uint16_t)freq))
+    return showError("Frequency is outside the current band");
+
+  updateFrequency((int)freq, false);
+  clearStationInfo();
+  identifyFrequency(currentFrequency + currentBFO / 1000);
+  return true;
+}
+
+//
+// Toggle channel mode: while it is on, the encoder cycles through the
+// filled memory slots instead of tuning the frequency
+//
+static void remoteSetChannelMode(bool on)
+{
+  if(setChannelMode(on))
+    Serial.println(on ? "Channels on" : "Channels off");
+  else
+    Serial.println("No channels saved");
+}
+
+//
 // Set current color theme from the remote
 //
 static void remoteSetColorTheme()
@@ -274,7 +310,7 @@ void remotePrintStatus()
   uint16_t tuningCapacitor = rx.getAntennaTuningCapacitor();
 
   // Remote serial
-  Serial.printf("%u,%u,%d,%d,%s,%s,%s,%s,%hu,%hu,%hu,%hu,%hu,%.2f,%hu\r\n",
+  Serial.printf("%u,%u,%d,%d,%s,%s,%s,%s,%hu,%hu,%hu,%hu,%hu,%.2f,%hu,%hu,%hu\r\n",
                 VER_APP,
                 currentFrequency,
                 currentBFO,
@@ -290,7 +326,10 @@ void remotePrintStatus()
                 remoteSnr,
                 tuningCapacitor,
                 remoteVoltage,
-                remoteSeqnum
+                remoteSeqnum,
+                // Channel mode and the selected channel (1-based)
+                channelMode ? 1 : 0,
+                channelMode ? memoryIdx + 1 : 0
                 );
 }
 
@@ -414,6 +453,26 @@ int remoteDoCommand(char key)
     case '#':
       if (remoteSetMemory())
         event |= REMOTE_PREFS;
+      break;
+
+    case 'F': // Tune to the frequency that follows the command
+      if (remoteSetFrequency())
+        event |= REMOTE_PREFS;
+      break;
+
+    case 'c': // Toggle channel mode
+      remoteSetChannelMode(!channelMode);
+      break;
+
+    case 'k': // Scan the band and report the stations found
+      // The scan runs to completion and blocks the main loop while it does,
+      // so the remote only gets the "begin" line before it starts
+      currentCmd = CMD_SCAN;
+      Serial.println("SCAN,START");
+      clickScan(true);
+      scanReportStations();
+      currentCmd = CMD_NONE;
+      event |= REMOTE_PREFS;
       break;
 
     case 'T':
