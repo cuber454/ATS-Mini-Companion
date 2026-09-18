@@ -92,6 +92,7 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs sm:text-sm font-digital text-icom-accent">SELECT SLOT</h4>
             <button
+              aria-label={showMemoryList ? 'Скрыть список слотов' : 'Показать список слотов'}
               onClick={handleShowMemory}
               disabled={!connected}
               className="px-3 py-1 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 font-digital text-xs"
@@ -106,6 +107,8 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
                 {Array.from({ length: 100 }, (_, i) => i + 1).map((slot) => (
                   <button
                     key={slot}
+                    aria-label={`Слот ${slot}`}
+                    aria-pressed={selectedSlot === slot}
                     onClick={() => setSelectedSlot(slot)}
                     className={`aspect-square rounded border font-digital text-[9px] transition-all ${
                       selectedSlot === slot
@@ -138,6 +141,7 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
               <label className="block text-[9px] text-icom-text-dim mb-0.5 font-digital">SLOT</label>
               <input
                 type="number"
+                aria-label="Номер слота, от 1 до 100"
                 min="1"
                 max="100"
                 value={selectedSlot}
@@ -151,6 +155,7 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
               <div>
                 <label className="block text-[9px] text-icom-text-dim mb-0.5 font-digital">BAND</label>
                 <select
+                  aria-label="Диапазон канала"
                   value={saveData.band}
                   onChange={(e) => setSaveData({ ...saveData, band: e.target.value })}
                   className="w-full bg-icom-bg border border-icom-accent/30 rounded px-2 py-1 text-sm text-icom-accent font-digital focus:border-icom-accent focus:outline-none"
@@ -176,6 +181,7 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
               <div>
                 <label className="block text-[9px] text-icom-text-dim mb-0.5 font-digital">MODE</label>
                 <select
+                  aria-label="Модуляция канала"
                   value={saveData.mode}
                   onChange={(e) => setSaveData({ ...saveData, mode: e.target.value })}
                   className="w-full bg-icom-bg border border-icom-accent/30 rounded px-2 py-1 text-sm text-icom-accent font-digital focus:border-icom-accent focus:outline-none"
@@ -193,6 +199,8 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
               <label className="block text-[9px] text-icom-text-dim mb-0.5 font-digital">FREQUENCY (Hz)</label>
               <input
                 type="text"
+                aria-label="Частота канала в герцах"
+                inputMode="numeric"
                 value={saveData.frequency}
                 onChange={(e) => setSaveData({ ...saveData, frequency: e.target.value.replace(/[^0-9]/g, '') })}
                 placeholder="107900000"
@@ -205,16 +213,18 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
 
             {/* Load Current State Button */}
             <button
+              aria-label="Взять частоту и моду с приёмника"
               onClick={handleLoadCurrentState}
               disabled={!connected}
               className="w-full py-1.5 rounded bg-icom-accent/10 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/20 active:bg-icom-accent/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-digital text-xs"
             >
-              📡 LOAD FROM CURRENT STATE
+              <span aria-hidden="true">📡 </span>LOAD FROM CURRENT STATE
             </button>
 
             {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-2">
               <button
+                aria-label={`Сохранить в слот ${selectedSlot}`}
                 onClick={handleSaveToMemory}
                 disabled={!connected}
                 className="py-2 rounded-lg bg-gradient-to-r from-icom-green/80 to-icom-accent border-2 border-icom-green text-white hover:from-icom-green hover:to-icom-accent-dim active:from-icom-green/90 active:to-icom-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-icom-strong font-digital text-xs"
@@ -223,6 +233,7 @@ export default function MemoryPanel({ serial, connected, currentMemory, frequenc
               </button>
 
               <button
+                aria-label={`Стереть слот ${selectedSlot}`}
                 onClick={handleClearSlot}
                 disabled={!connected}
                 className="py-2 rounded-lg bg-gradient-to-r from-red-600/80 to-red-800 border-2 border-red-600 text-white hover:from-red-600 hover:to-red-700 active:from-red-600/90 active:to-red-800/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-icom-strong font-digital text-xs"

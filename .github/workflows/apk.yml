@@ -1,0 +1,44 @@
+name: Сборка APK
+
+on:
+  push:
+    branches: [ main, a11y-labels ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Собрать веб-часть
+        working-directory: app
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Синхронизировать веб-часть с Android
+        working-directory: app
+        run: npx cap sync android
+
+      - name: Собрать APK
+        working-directory: app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ats-mini-companion-debug-apk
+          path: app/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

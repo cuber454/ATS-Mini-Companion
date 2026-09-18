@@ -131,15 +131,18 @@ export default function Display({ data, connected, serial }) {
           <div className="flex items-center justify-center gap-2 sm:gap-3">
             <input
               type="text"
+              aria-label={`Частота в ${getFrequencyUnit() === 'MHz' ? 'мегагерцах' : 'килогерцах'}`}
               value={inputFreq}
               onChange={(e) => setInputFreq(e.target.value)}
               onKeyDown={handleKeyPress}
               onBlur={() => setIsEditing(false)}
+              inputMode="decimal"
               autoFocus
               className="text-4xl sm:text-6xl font-digital text-icom-accent digital-display text-center tracking-wider bg-icom-bg/50 border-2 border-icom-accent rounded-lg px-3 py-1 sm:px-4 sm:py-2 max-w-xs sm:max-w-md focus:outline-none focus:border-icom-green"
               placeholder="000.000"
             />
             <button
+              aria-label="Перейти на частоту"
               onClick={handleFrequencySubmit}
               className="px-3 py-1 sm:px-4 sm:py-2 bg-icom-green text-icom-bg rounded-lg font-digital text-sm hover:bg-icom-accent transition-all"
             >
@@ -147,7 +150,14 @@ export default function Display({ data, connected, serial }) {
             </button>
           </div>
         ) : (
+          /* role="button": иначе TalkBack не поймёт, что по частоте можно нажать
+             и ввести её руками, — для него это будет просто текст. */
           <div
+            role={connected ? 'button' : undefined}
+            tabIndex={connected ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') handleFrequencyClick();
+            }}
             className={`text-4xl sm:text-6xl font-digital text-icom-accent digital-display text-center tracking-wider ${connected ? 'cursor-pointer hover:text-icom-green transition-colors' : ''}`}
             onClick={handleFrequencyClick}
             title={connected ? 'Click to enter frequency' : ''}
@@ -168,7 +178,9 @@ export default function Display({ data, connected, serial }) {
           </div>
 
           {/* S-Meter Scale */}
-          <div className="relative h-6 sm:h-8 bg-icom-display rounded border border-icom-accent/30">
+          {/* Шкала — картинка: циферки делений и полоски скринридеру не нужны,
+              значение уровня читается рядом (dBµV / dB). */}
+          <div aria-hidden="true" className="relative h-6 sm:h-8 bg-icom-display rounded border border-icom-accent/30">
             {/* Background gradient zones */}
             <div className="absolute inset-0 flex">
               <div className="flex-1 bg-gradient-to-r from-red-900/30 to-red-600/30"></div>
@@ -212,7 +224,9 @@ export default function Display({ data, connected, serial }) {
           </div>
 
           {/* SNR Meter Scale */}
-          <div className="relative h-6 sm:h-8 bg-icom-display rounded border border-icom-accent/30">
+          {/* Шкала — картинка: циферки делений и полоски скринридеру не нужны,
+              значение уровня читается рядом (dBµV / dB). */}
+          <div aria-hidden="true" className="relative h-6 sm:h-8 bg-icom-display rounded border border-icom-accent/30">
             {/* Background gradient */}
             <div className="absolute inset-0 bg-gradient-to-r from-red-900/20 via-icom-amber/20 to-icom-green/20"></div>
 
@@ -253,7 +267,7 @@ export default function Display({ data, connected, serial }) {
 
       {/* Status Indicator */}
       {!connected && (
-        <div className="mt-4 text-center text-red-500 font-digital animate-pulse">
+        <div role="status" className="mt-4 text-center text-red-500 font-digital animate-pulse">
           NOT CONNECTED
         </div>
       )}

@@ -87,7 +87,7 @@ export default function ATSController() {
         {/* Header */}
         <div className="bg-icom-panel rounded-lg p-3 mb-2 border border-icom-accent/30 shadow-lg flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-icom-green' : 'bg-icom-red'} ${connected ? 'led-indicator' : ''}`}></div>
+            <div aria-hidden="true" className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-icom-green' : 'bg-icom-red'} ${connected ? 'led-indicator' : ''}`}></div>
             <div>
               <h1 className="text-lg sm:text-xl font-bold text-icom-text font-digital">ATS MINI Companion App</h1>
             </div>
@@ -97,6 +97,8 @@ export default function ATSController() {
         {/* Tab Menu */}
         <div className="grid grid-cols-5 gap-1 mb-2 flex-shrink-0">
           <button
+            aria-label="Подключение"
+            aria-pressed={activeTab === 'connect'}
             onClick={() => setActiveTab('connect')}
             className={`px-2 py-2 rounded font-digital text-[10px] sm:text-xs transition-all ${
               activeTab === 'connect'
@@ -108,6 +110,8 @@ export default function ATSController() {
             <span className="sm:hidden">CON</span>
           </button>
           <button
+            aria-label="Радио"
+            aria-pressed={activeTab === 'radio'}
             onClick={() => setActiveTab('radio')}
             className={`px-2 py-2 rounded font-digital text-[10px] sm:text-xs transition-all ${
               activeTab === 'radio'
@@ -119,6 +123,8 @@ export default function ATSController() {
             <span className="sm:hidden">RAD</span>
           </button>
           <button
+            aria-label="Память"
+            aria-pressed={activeTab === 'memory'}
             onClick={() => setActiveTab('memory')}
             className={`px-2 py-2 rounded font-digital text-[10px] sm:text-xs transition-all ${
               activeTab === 'memory'
@@ -130,6 +136,8 @@ export default function ATSController() {
             <span className="sm:hidden">MEM</span>
           </button>
           <button
+            aria-label="Отладка"
+            aria-pressed={activeTab === 'debug'}
             onClick={() => setActiveTab('debug')}
             className={`px-2 py-2 rounded font-digital text-[10px] sm:text-xs transition-all ${
               activeTab === 'debug'
@@ -141,6 +149,8 @@ export default function ATSController() {
             <span className="sm:hidden">DBG</span>
           </button>
           <button
+            aria-label="О приложении"
+            aria-pressed={activeTab === 'about'}
             onClick={() => setActiveTab('about')}
             className={`px-2 py-2 rounded font-digital text-[10px] sm:text-xs transition-all ${
               activeTab === 'about'
@@ -163,6 +173,7 @@ export default function ATSController() {
                 <div>
                   <label className="block text-sm text-icom-text-dim font-digital mb-2">Baud Rate</label>
                   <select
+                    aria-label="Скорость порта"
                     value={baudRate}
                     onChange={(e) => setBaudRate(Number(e.target.value))}
                     disabled={connected}
@@ -185,13 +196,13 @@ export default function ATSController() {
                 </button>
 
                 {error && (
-                  <div className="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded text-sm">
+                  <div role="alert" className="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded text-sm">
                     {error}
                   </div>
                 )}
 
                 {connected && lastUpdate && (
-                  <div className="text-center text-sm text-icom-green border-t border-icom-accent/20 pt-4">
+                  <div role="status" className="text-center text-sm text-icom-green border-t border-icom-accent/20 pt-4">
                     ✓ Connected • Last update: {lastUpdate}
                   </div>
                 )}

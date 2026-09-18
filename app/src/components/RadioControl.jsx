@@ -155,6 +155,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
         {/* Horizontal buttons: − | MENU | + */}
         <div className="flex items-center justify-center gap-3 sm:gap-4 mb-3">
           <button
+            aria-label="Частота ниже"
             onPointerDown={() => handleStepButtonDown('down')}
             onPointerUp={handleStepButtonUp}
             onPointerLeave={handleStepButtonUp}
@@ -167,15 +168,17 @@ export default function RadioControl({ serial, connected, frequency, currentBand
           </button>
 
           <button
+            aria-label="Меню приёмника"
             onClick={() => serial?.encoderPress()}
             disabled={!connected}
             className="flex-1 max-w-xs h-16 sm:h-20 rounded-lg bg-gradient-to-r from-icom-amber/20 to-orange-600/20 border-2 border-icom-amber text-icom-amber hover:from-icom-amber/30 hover:to-orange-600/30 active:from-icom-amber/40 active:to-orange-600/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-icom font-digital text-sm sm:text-base font-bold flex flex-col items-center justify-center gap-1"
           >
-            <span className="text-xl sm:text-2xl">⚙️</span>
-            <span>MENU</span>
+            <span className="text-xl sm:text-2xl" aria-hidden="true">⚙️</span>
+            <span aria-hidden="true">MENU</span>
           </button>
 
           <button
+            aria-label="Частота выше"
             onPointerDown={() => handleStepButtonDown('up')}
             onPointerUp={handleStepButtonUp}
             onPointerLeave={handleStepButtonUp}
@@ -195,6 +198,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">BAND</div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="Диапазон ниже"
                 onClick={() => handleBandChange('prev')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -205,6 +209,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 {currentBand || '---'}
               </div>
               <button
+                aria-label="Диапазон выше"
                 onClick={() => handleBandChange('next')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -219,6 +224,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">MODE</div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="Модуляция ниже"
                 onClick={() => handleModeChange('prev')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -229,6 +235,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 {currentMode || '---'}
               </div>
               <button
+                aria-label="Модуляция выше"
                 onClick={() => handleModeChange('next')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -249,6 +256,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">BW</div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="Полоса пропускания ниже"
                 onClick={() => handleBandwidthChange('prev')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -259,6 +267,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 {bandwidth || '---'}
               </div>
               <button
+                aria-label="Полоса пропускания выше"
                 onClick={() => handleBandwidthChange('next')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -273,6 +282,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">STEP</div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="Шаг настройки меньше"
                 onClick={() => handleStepChange('prev')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -283,6 +293,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 {step || '---'}
               </div>
               <button
+                aria-label="Шаг настройки больше"
                 onClick={() => handleStepChange('next')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -297,6 +308,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">AGC/ATTN</div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="АРУ ниже"
                 onClick={() => handleAGCChange('down')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -307,6 +319,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 {agc || '---'}
               </div>
               <button
+                aria-label="АРУ выше"
                 onClick={() => handleAGCChange('up')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 text-xs font-bold"
@@ -327,6 +340,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             </div>
             <div className="flex items-center gap-1">
               <button
+                aria-label="Громкость ниже"
                 onClick={() => handleVolumeChange('down')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 flex items-center justify-center text-base text-icom-accent font-bold"
@@ -340,6 +354,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 ></div>
               </div>
               <button
+                aria-label="Громкость выше"
                 onClick={() => handleVolumeChange('up')}
                 disabled={!connected}
                 className="w-7 h-7 rounded bg-icom-accent/20 border border-icom-accent/40 hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 flex items-center justify-center text-base text-icom-accent font-bold"
@@ -354,6 +369,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
             <div className="text-[10px] text-icom-text-dim text-center mb-1 font-digital">BACKLIGHT</div>
             <div className="flex items-center justify-center gap-2">
               <button
+                aria-label="Подсветка тусклее"
                 onClick={() => handleBacklightChange('down')}
                 disabled={!connected}
                 className="flex-1 py-2 rounded bg-icom-accent/20 border border-icom-accent/40 hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 flex items-center justify-center text-base text-icom-accent font-bold"
@@ -361,6 +377,7 @@ export default function RadioControl({ serial, connected, frequency, currentBand
                 −
               </button>
               <button
+                aria-label="Подсветка ярче"
                 onClick={() => handleBacklightChange('up')}
                 disabled={!connected}
                 className="flex-1 py-2 rounded bg-icom-accent/20 border border-icom-accent/40 hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 flex items-center justify-center text-base text-icom-accent font-bold"
