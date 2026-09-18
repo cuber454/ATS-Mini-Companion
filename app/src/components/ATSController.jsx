@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { SerialConnection } from '../lib/SerialConnection';
 import { BleConnection } from '../lib/BleConnection';
@@ -45,17 +45,47 @@ export default function ATSController() {
   const [error, setError] = useState(null);
   const [rawData, setRawData] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
+  // Short spoken notes about one-off events. The screen reader reads this out
+  // on its own, which is the only feedback a blind user gets from a command
+  // that changes nothing on the screen.
+  const [announcement, setAnnouncement] = useState('');
+  // The station being tuned to, until the telemetry confirms it was reached
+  const pendingTune = useRef(null);
+  // Whether the firmware version has been announced yet for this connection
+  const greeted = useRef(false);
   // state: idle | running | done | timeout
   const [scan, setScan] = useState({ state: 'idle', stations: [], found: null });
 
   useEffect(() => {
     // Each transport is its own client; switching rebuilds it
     const client = transport === 'ble' ? new BleConnection() : new SerialConnection();
+    greeted.current = false;
 
     // Setup callbacks
     client.onMonitorData((data) => {
       setMonitorData(data);
       setLastUpdate(new Date().toLocaleTimeString());
+
+      // Which firmware is actually in the receiver is the first thing worth
+      // knowing, and the version only arrives with the telemetry
+      if (!greeted.current && data.firmware && data.firmware !== '---') {
+        greeted.current = true;
+        setAnnouncement(`Подключено, прошивка ${data.firmware.replace(/^v/, '')}`);
+      }
+
+      // Confirm a tune out loud: the receiver reports where it actually is, so
+      // a station that was never reached can be told apart from one that was
+      const pending = pendingTune.current;
+      if (pending) {
+        const tolerance = pending.mode === 'FM' ? 10000 : 1000;
+        if (Math.abs(data.frequency - pending.hz) <= tolerance) {
+          pendingTune.current = null;
+          setAnnouncement(`Настроено: ${pending.label}`);
+        } else if (Date.now() > pending.until) {
+          pendingTune.current = null;
+          setAnnouncement(`Приёмник не отозвался на ${pending.label}`);
+        }
+      }
     });
 
     client.onRawData((data) => {
@@ -114,6 +144,29 @@ export default function ATSController() {
     if (!connected) return;
     setScan({ state: 'running', stations: [], found: null });
     serial?.scanBand();
+  };
+
+  /**
+   * Tune to a station the scan found. The receiver takes the frequency in band
+   * units: 10 kHz for FM, kHz everywhere else.
+   *
+   * @param {object} station - Station from the scan, frequency in band units
+   * @param {string} label - Its frequency, already formatted for speech
+   */
+  const handleTune = async (station, label) => {
+    const mode = monitorData.mode;
+    const hz = mode === 'FM' ? station.freq * 10000 : station.freq * 1000;
+
+    pendingTune.current = { hz, mode, label, until: Date.now() + 5000 };
+    setAnnouncement(`Настраиваю: ${label}`);
+
+    try {
+      await serial?.setFrequencyTo(hz, mode);
+    } catch (err) {
+      pendingTune.current = null;
+      setAnnouncement(`Не удалось передать настройку: ${label}`);
+      console.error('[ATS Mini] Tune error:', err);
+    }
   };
 
   const handleConnect = async () => {
@@ -244,6 +297,11 @@ export default function ATSController() {
           </div>
         )}
 
+        {/* Spoken notes, hidden on screen: the screen reader announces them */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </div>
+
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'connect' && (
@@ -364,6 +422,7 @@ export default function ATSController() {
                 mode={monitorData.mode}
                 firmware={monitorData.firmware}
                 onScan={handleScan}
+                onTune={handleTune}
               />
             </div>
           )}

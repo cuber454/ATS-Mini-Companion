@@ -5,7 +5,7 @@
  * The receiver mutes its audio and stops sending telemetry while it scans,
  * which is why the panel says so out loud: silence there is expected.
  */
-export default function ScanPanel({ serial, connected, scan, mode, firmware, onScan }) {
+export default function ScanPanel({ connected, scan, mode, firmware, onScan, onTune }) {
   const isFm = mode === 'FM';
 
   // Scan and channel mode came with firmware 2.34; older ones ignore them
@@ -57,7 +57,7 @@ export default function ScanPanel({ serial, connected, scan, mode, firmware, onS
             <li key={`${station.freq}-${index}`}>
               <button
                 aria-label={`Настроиться на ${label(station.freq)}, уровень ${station.rssi}`}
-                onClick={() => serial?.setFrequencyTo(toHz(station.freq), mode)}
+                onClick={() => onTune?.(station, label(station.freq))}
                 className="w-full flex items-center justify-between px-3 py-2 rounded bg-icom-display/50 border border-icom-accent/20 hover:bg-icom-accent/20 active:bg-icom-accent/30 transition-all"
               >
                 <span className="font-digital text-icom-accent text-sm">{label(station.freq)}</span>
