@@ -251,7 +251,8 @@ static const char *uiLayoutDesc[] =
 // Bluetooth Mode Menu
 //
 
-uint8_t bleModeIdx = BLE_OFF; // BLE desactivado por defecto (activar manualmente en Settings)
+uint8_t bleModeIdx = BLE_BLUEFRUIT; // BLE on by default, so it does not have to be
+                                    // enabled through the on-screen Settings menu
 static const char *bleModeDesc[] =
 { "Off", "Bluefruit" };
 
