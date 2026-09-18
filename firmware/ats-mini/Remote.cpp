@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include "Common.h"
 #include "Themes.h"
 #include "Utils.h"
@@ -7,6 +9,48 @@
 static uint32_t remoteTimer = millis();
 static uint8_t remoteSeqnum = 0;
 static bool remoteLogOn = false;
+
+// A remote command can arrive over the cable or over Bluetooth. A command with
+// an argument is buffered whole when it comes over Bluetooth (see
+// bleDoCommand), and the helpers below then read that argument from the buffer
+// instead of from the cable: the cable has nothing on it, and waiting for bytes
+// that never come would stall the receiver until the watchdog restarted it.
+static const char *remoteLine = NULL;     // Line being parsed, NULL for the cable
+static const char *remoteLineEnd = NULL;  // One past the last byte of the line
+
+static bool remoteInputReady()
+{
+  return remoteLine ? (remoteLine < remoteLineEnd) : (Serial.available() > 0);
+}
+
+static int remoteInputPeek()
+{
+  if(remoteLine) return (remoteLine < remoteLineEnd) ? (uint8_t)*remoteLine : 0;
+  return Serial.peek();
+}
+
+static char remoteInputRead()
+{
+  if(remoteLine) return (remoteLine < remoteLineEnd) ? *remoteLine++ : '\0';
+  return (char)Serial.read();
+}
+
+//
+// Send one line to both links: the command may have come over the cable or over
+// Bluetooth, and its answer has to go back the same way.
+//
+static void remoteReport(const char *fmt, ...)
+{
+  char reportBuffer[128];
+
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(reportBuffer, sizeof(reportBuffer), fmt, args);
+  va_end(args);
+
+  Serial.print(reportBuffer);
+  blePrint(reportBuffer);
+}
 
 static uint8_t char2nibble(char key)
 {
@@ -62,9 +106,11 @@ char readSerialChar()
 {
   char key;
 
-  while (!Serial.available());
-  key = Serial.read();
-  Serial.print(key);
+  while (!remoteInputReady());
+  key = remoteInputRead();
+  // Echo on the cable only: the Bluetooth link echoes every byte it receives
+  // back to the phone already, and echoing here would double those characters
+  if(!remoteLine) Serial.print(key);
   return key;
 }
 
@@ -72,7 +118,7 @@ long int readSerialInteger()
 {
   long int result = 0;
   while (true) {
-    char ch = Serial.peek();
+    char ch = remoteInputPeek();
     if (ch == 0xFF) {
       continue;
     } else if ((ch >= '0') && (ch <= '9')) {
@@ -89,7 +135,7 @@ void readSerialString(char *bufStr, uint8_t bufLen)
 {
   uint8_t length = 0;
   while (true) {
-    char ch = Serial.peek();
+    char ch = remoteInputPeek();
     if (ch == 0xFF) {
       continue;
     } else if (ch == ',' || ch < ' ') {
@@ -108,20 +154,25 @@ void readSerialString(char *bufStr, uint8_t bufLen)
 
 static bool expectNewline()
 {
-  char ch;
-  while ((ch = Serial.peek()) == 0xFF);
-  if (ch == '\r') {
-    Serial.read();
-    return true;
-  }
-  return false;
+  // A command collected over Bluetooth ends where its line ends, terminator or
+  // not: the line itself is the boundary, so there is nothing left to check
+  if(remoteLine) return true;
+
+  // On the cable there is no line boundary, and the application does not send a
+  // terminating newline for every command: one that is already there gets
+  // consumed, and silence counts as the end of the command
+  if(Serial.available() && (Serial.peek() == '\r' || Serial.peek() == '\n'))
+    remoteInputRead();
+
+  return true;
 }
 
 static bool showError(const char *message)
 {
   // Consume the remaining input
-  while (Serial.available()) readSerialChar();
-  Serial.printf("\r\nError: %s\r\n", message);
+  if(remoteLine) remoteLine = remoteLineEnd;
+  else while (Serial.available()) Serial.read();
+  remoteReport("\r\nError: %s\r\n", message);
   return false;
 }
 
@@ -129,7 +180,7 @@ static void remoteGetMemories()
 {
   for (uint8_t i = 0; i < getTotalMemories(); i++) {
     if (memories[i].freq) {
-      Serial.printf("#%02d,%s,%ld,%s\r\n", i + 1, bands[memories[i].band].bandName, memories[i].freq, bandModeDesc[memories[i].mode]);
+      remoteReport("#%02d,%s,%ld,%s\r\n", i + 1, bands[memories[i].band].bandName, memories[i].freq, bandModeDesc[memories[i].mode]);
     }
   }
 }
@@ -217,13 +268,13 @@ static bool remoteSetFrequency()
   long int freq = readSerialInteger();
 
   // Consume the terminating newline, if any
-  if(Serial.peek() == '\r' || Serial.peek() == '\n') Serial.read();
+  if(remoteInputPeek() == '\r' || remoteInputPeek() == '\n') remoteInputRead();
 
   if(freq <= 0 || freq > 0xFFFF)
-    return showError("Invalid frequency");
+    return showError("Частота указана неверно");
 
   if(!isFreqInBand(getCurrentBand(), (uint16_t)freq))
-    return showError("Frequency is outside the current band");
+    return showError("Частота вне текущего диапазона");
 
   updateFrequency((int)freq, false);
   clearStationInfo();
@@ -238,9 +289,9 @@ static bool remoteSetFrequency()
 static void remoteSetChannelMode(bool on)
 {
   if(setChannelMode(on))
-    Serial.println(on ? "Channels on" : "Channels off");
+    remoteReport("%s\r\n", on ? "Channels on" : "Channels off");
   else
-    Serial.println("No channels saved");
+    remoteReport("No channels saved\r\n");
 }
 
 //
@@ -346,6 +397,25 @@ void remoteTickTime()
     // Show status
     remotePrintStatus();
   }
+}
+
+//
+// Run a command that arrived as a whole line, with its argument following the
+// command letter. The argument is read from the line, not from the cable.
+//
+int remoteDoCommandLine(const char *line, uint8_t length)
+{
+  if(!length) return(0);
+
+  remoteLine    = line;
+  remoteLineEnd = line + length;
+
+  int event = remoteDoCommand(line[0]);
+
+  remoteLine    = NULL;
+  remoteLineEnd = NULL;
+
+  return(event);
 }
 
 //

@@ -48,6 +48,38 @@ void bleInit(uint8_t bleMode)
   delay(100);
 }
 
+// A command that takes an argument arrives one byte at a time, so it is
+// gathered into a line here and handed to the parser whole. Letting the parser
+// read its argument straight off the link would mean re-entering this function
+// from inside itself for every byte.
+static char bleCmdLine[128];
+static uint8_t bleCmdLen = 0;
+static uint32_t bleCmdTime = millis();
+
+// Time of silence that ends a line, in msecs: the memory command is sent
+// without a terminating newline, so quiet has to count as an ending too
+#define BLE_CMD_QUIET 80
+
+// Commands with an argument following the command letter
+static bool bleTakesArgument(char key)
+{
+  return (key == 'F') || (key == '#') || (key == '!');
+}
+
+//
+// Run the line collected so far and start a new one
+//
+static int bleRunCommandLine()
+{
+  uint8_t length = bleCmdLen;
+  int event;
+
+  bleCmdLen = 0;
+  event = remoteDoCommandLine(bleCmdLine, length);
+
+  return(event);
+}
+
 int bleDoCommand(uint8_t bleMode)
 {
   if(bleMode == BLE_OFF) return 0;
@@ -56,9 +88,22 @@ int bleDoCommand(uint8_t bleMode)
     if (BLESerial.available()) {
       char bleChar = BLESerial.read();
       BLESerial.write(bleChar);
+
+      // Gather an argument, or finish the line at its terminator
+      if(bleCmdLen || bleTakesArgument(bleChar))
+      {
+        if(bleCmdLen < sizeof(bleCmdLine)) bleCmdLine[bleCmdLen++] = bleChar;
+        bleCmdTime = millis();
+        if((bleChar != '\n') && (bleChar != '\r') && (bleCmdLen < sizeof(bleCmdLine)))
+          return(0);
+        return(bleRunCommandLine());
+      }
+
       // Execute the remote command and return the event
       return remoteDoCommand(bleChar);
     }
+    else if(bleCmdLen && (millis() - bleCmdTime >= BLE_CMD_QUIET))
+      return(bleRunCommandLine());
   }
   return 0;
 }
