@@ -1,6 +1,9 @@
 import { useRef, useEffect } from 'react';
 
-export default function RadioControl({ serial, connected, frequency, currentBand, currentMode, bandwidth, step, volume, agc, sleep, channelMode, channel }) {
+export default function RadioControl({ serial, connected, frequency, currentBand, currentMode, bandwidth, step, volume, agc, sleep, channelMode, channel, firmware }) {
+  // Channel mode came with firmware 2.34; older ones ignore the command
+  const tooOld = /^v\d/.test(firmware) && parseFloat(firmware.slice(1)) < 2.34;
+
   const longPressTimerRef = useRef(null);
   const isLongPressingRef = useRef(false);
   const longPressDirectionRef = useRef(null);
@@ -152,14 +155,16 @@ export default function RadioControl({ serial, connected, frequency, currentBand
         <div>
           <div aria-hidden="true" className="text-[10px] font-digital text-icom-text-dim">CHANNELS</div>
           <div role="status" className="text-sm font-digital text-icom-green">
-            {channelMode ? `Канал ${channel}` : 'Обычная настройка'}
+            {tooOld
+              ? 'Появится после обновления прошивки'
+              : channelMode ? `Канал ${channel}` : 'Обычная настройка'}
           </div>
         </div>
         <button
           aria-label="Режим каналов"
           aria-pressed={channelMode}
           onClick={() => serial?.toggleChannelMode()}
-          disabled={!connected}
+          disabled={!connected || tooOld}
           className={`px-4 py-2 rounded font-digital text-sm border transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
             channelMode
               ? 'bg-icom-green/20 border-icom-green text-icom-green'

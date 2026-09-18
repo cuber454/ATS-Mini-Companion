@@ -5,8 +5,12 @@
  * The receiver mutes its audio and stops sending telemetry while it scans,
  * which is why the panel says so out loud: silence there is expected.
  */
-export default function ScanPanel({ serial, connected, scan, mode, onScan }) {
+export default function ScanPanel({ serial, connected, scan, mode, firmware, onScan }) {
   const isFm = mode === 'FM';
+
+  // Scan and channel mode came with firmware 2.34; older ones ignore them
+  const tooOld = /^v\d/.test(firmware) && parseFloat(firmware.slice(1)) < 2.34;
+  const ready = connected && !tooOld;
 
   // The receiver reports frequencies the same way it reports the tuned
   // frequency: 10 kHz units in FM, kHz everywhere else
@@ -19,13 +23,13 @@ export default function ScanPanel({ serial, connected, scan, mode, onScan }) {
       : `${(hz / 1000).toFixed(0)} кГц`;
   };
 
-  const status = scan.running
-    ? 'Сканирую. Приёмник молчит, это нормально.'
-    : scan.found === null
-      ? 'Скан идёт по всему диапазону, это 10–15 секунд.'
-      : scan.found === 0
-        ? 'Ничего не нашлось.'
-        : `Нашлось станций: ${scan.found}. Список ниже.`;
+  let status;
+  if (tooOld) status = 'Скан появится после обновления прошивки приёмника.';
+  else if (scan.state === 'running') status = 'Сканирую. Приёмник молчит, это нормально.';
+  else if (scan.state === 'timeout') status = 'Приёмник не ответил на скан.';
+  else if (scan.state === 'done' && scan.found === 0) status = 'Ничего не нашлось.';
+  else if (scan.state === 'done') status = `Нашлось станций: ${scan.found}. Список ниже.`;
+  else status = 'Скан идёт по всему диапазону, это 10–15 секунд.';
 
   return (
     <div className="bg-icom-panel rounded-lg p-3 border border-icom-accent/30">
@@ -36,10 +40,10 @@ export default function ScanPanel({ serial, connected, scan, mode, onScan }) {
         <button
           aria-label="Сканировать диапазон"
           onClick={onScan}
-          disabled={!connected || scan.running}
+          disabled={!ready || scan.state === 'running'}
           className="px-4 py-2 rounded font-digital text-sm bg-icom-accent/20 border border-icom-accent text-icom-accent hover:bg-icom-accent/30 active:bg-icom-accent/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
         >
-          {scan.running ? 'ИДЁТ…' : 'СКАНИРОВАТЬ'}
+          {scan.state === 'running' ? 'ИДЁТ…' : 'СКАНИРОВАТЬ'}
         </button>
       </div>
 

@@ -38,7 +38,8 @@ export default function ATSController() {
   const [error, setError] = useState(null);
   const [rawData, setRawData] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [scan, setScan] = useState({ running: false, stations: [], found: null });
+  // state: idle | running | done | timeout
+  const [scan, setScan] = useState({ state: 'idle', stations: [], found: null });
 
   useEffect(() => {
     // Initialize serial connection
@@ -59,11 +60,11 @@ export default function ATSController() {
       setScan((prev) => {
         switch (event.type) {
           case 'start':
-            return { running: true, stations: [], found: null };
+            return { state: 'running', stations: [], found: null };
           case 'station':
             return { ...prev, stations: [...prev.stations, event] };
           case 'end':
-            return { ...prev, running: false, found: event.count };
+            return { ...prev, state: 'done', found: event.count };
           default:
             return prev;
         }
@@ -93,16 +94,16 @@ export default function ATSController() {
 
   // A scan that never reports back must not leave the button stuck
   useEffect(() => {
-    if (!scan.running) return;
+    if (scan.state !== 'running') return;
     const timer = setTimeout(() => {
-      setScan((prev) => ({ ...prev, running: false, found: null }));
+      setScan((prev) => (prev.state === 'running' ? { ...prev, state: 'timeout' } : prev));
     }, 60000);
     return () => clearTimeout(timer);
-  }, [scan.running]);
+  }, [scan.state]);
 
   const handleScan = () => {
     if (!connected) return;
-    setScan({ running: true, stations: [], found: null });
+    setScan({ state: 'running', stations: [], found: null });
     serialRef.current?.scanBand();
   };
 
@@ -283,6 +284,7 @@ export default function ATSController() {
                 sleep={monitorData.sleep}
                 channelMode={monitorData.channelMode}
                 channel={monitorData.channel}
+                firmware={monitorData.firmware}
               />
 
               {/* Band scan */}
@@ -291,6 +293,7 @@ export default function ATSController() {
                 connected={connected}
                 scan={scan}
                 mode={monitorData.mode}
+                firmware={monitorData.firmware}
                 onScan={handleScan}
               />
             </div>
