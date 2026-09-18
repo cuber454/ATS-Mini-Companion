@@ -21,6 +21,9 @@
  * - T: Toggle theme editor
  * - @: Get current theme
  * - !: Set theme (hex color list)
+ * - k: Scan the current band, report the stations found
+ * - F: Tune to frequency (format: F7529), value in kHz, or 10 kHz for FM
+ * - c: Toggle channel mode (the encoder cycles through the saved channels)
  */
 
 // Dynamic import for Capacitor (only available after installation)
@@ -45,6 +48,8 @@ export class SerialConnection {
     this.errorCallback = null;
     this.connectionCallback = null;
     this.rawDataCallback = null;
+    this.scanCallback = null;
+    this.noticeCallback = null;
     this.buffer = '';
     this.isAndroid = Capacitor ? Capacitor.getPlatform() === 'android' : false;
     this.readCallbackId = null;
@@ -288,6 +293,26 @@ export class SerialConnection {
     // Log all received data to console for debugging
     console.log('[ATS Mini RX]:', data);
 
+    // Scan results, one line per event
+    if (data.startsWith('SCAN,')) {
+      this.processScanData(data);
+      return;
+    }
+
+    // Plain-text messages from the firmware
+    if (data.startsWith('Error:')) {
+      if (this.noticeCallback) {
+        this.noticeCallback({ type: 'error', text: data.slice(6).trim() });
+      }
+      return;
+    }
+    if (data === 'No channels saved') {
+      if (this.noticeCallback) {
+        this.noticeCallback({ type: 'notice', text: 'no-channels' });
+      }
+      return;
+    }
+
     // Check if it's monitor mode data (comma-separated values)
     if (data.includes(',')) {
       const values = data.split(',');
@@ -349,7 +374,10 @@ export class SerialConnection {
           sleep: false, // Not available in monitor data
           memory: values[14], // Sequence number
           bfo: parseInt(values[2]) || 0, // BFO for SSB
-          tuningCapacitor: parseInt(values[12]) || 0 // Antenna tuning
+          tuningCapacitor: parseInt(values[12]) || 0, // Antenna tuning
+          // Firmware 2.33 and up: channel mode and the selected channel
+          channelMode: values.length > 16 ? values[15] === '1' : false,
+          channel: values.length > 16 ? (parseInt(values[16]) || 0) : 0
         };
 
         console.log('[ATS Mini] Monitor data parsed:', monitorData);
@@ -360,6 +388,40 @@ export class SerialConnection {
       } else {
         console.warn('[ATS Mini] Insufficient data fields:', values.length, 'expected 15');
       }
+    }
+  }
+
+  /**
+   * Process one line of scan results
+   *
+   * Lines look like:
+   *   SCAN,START                  scan has begun, the receiver goes quiet
+   *   SCAN,BEGIN,<step>,<start>   the station list starts here
+   *   SCAN,F,<freq>,<rssi>,<snr>  one station, frequencies in band units
+   *   SCAN,END,<count>            list finished, <count> stations sent
+   *
+   * @param {string} data - Received data line
+   */
+  processScanData(data) {
+    if (!this.scanCallback) return;
+
+    const [, kind, a, b, c] = data.split(',');
+
+    switch (kind) {
+      case 'START':
+        this.scanCallback({ type: 'start' });
+        break;
+      case 'BEGIN':
+        this.scanCallback({ type: 'begin', step: Number(a), startFreq: Number(b) });
+        break;
+      case 'F':
+        this.scanCallback({ type: 'station', freq: Number(a), rssi: Number(b), snr: Number(c) });
+        break;
+      case 'END':
+        this.scanCallback({ type: 'end', count: Number(a) || 0 });
+        break;
+      default:
+        break;
     }
   }
 
@@ -444,6 +506,35 @@ export class SerialConnection {
     await this.sendCommand(command);
   }
 
+  // ==================== Scan and Channel Commands ====================
+
+  /**
+   * Scan the current band. Takes 10-15 seconds, during which the receiver
+   * is muted and sends no telemetry at all: the stations arrive afterwards,
+   * through the onScanData() callback.
+   */
+  async scanBand() { await this.sendCommand('k'); }
+
+  /**
+   * Switch the receiver in and out of channel mode. While it is on, the
+   * encoder cycles through the saved channels. The state is reported back
+   * in the telemetry (channelMode and channel).
+   */
+  async toggleChannelMode() { await this.sendCommand('c'); }
+
+  /**
+   * Tune straight to a frequency, without stepping through everything
+   * in between. The receiver takes the value in band units: kHz for
+   * AM and SSB, 10 kHz for FM.
+   *
+   * @param {number} hz - Frequency in Hz
+   * @param {string} mode - Current modulation (FM, AM, LSB, USB)
+   */
+  async setFrequencyTo(hz, mode) {
+    const units = mode === 'FM' ? Math.round(hz / 10000) : Math.round(hz / 1000);
+    await this.sendCommand(`F${units}\n`);
+  }
+
   async toggleThemeEditor() { await this.sendCommand('T'); }
 
   async getCurrentTheme() { await this.sendCommand('@'); }
@@ -461,6 +552,20 @@ export class SerialConnection {
 
   onRawData(callback) {
     this.rawDataCallback = callback;
+  }
+
+  /**
+   * Called for every line of the band scan: start, station, end
+   */
+  onScanData(callback) {
+    this.scanCallback = callback;
+  }
+
+  /**
+   * Called for plain-text messages from the firmware, such as errors
+   */
+  onNotice(callback) {
+    this.noticeCallback = callback;
   }
 
   onError(callback) {

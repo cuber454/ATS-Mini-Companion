@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 
-export default function RadioControl({ serial, connected, frequency, currentBand, currentMode, bandwidth, step, volume, agc, sleep }) {
+export default function RadioControl({ serial, connected, frequency, currentBand, currentMode, bandwidth, step, volume, agc, sleep, channelMode, channel }) {
   const longPressTimerRef = useRef(null);
   const isLongPressingRef = useRef(false);
   const longPressDirectionRef = useRef(null);
@@ -146,6 +146,30 @@ export default function RadioControl({ serial, connected, frequency, currentBand
 
   return (
     <div className="space-y-3">
+      {/* Channel mode: with it on, the knob on the receiver itself cycles
+          through the saved channels instead of tuning the frequency */}
+      <div className="bg-icom-panel rounded-lg p-3 border border-icom-accent/30 flex items-center justify-between gap-3">
+        <div>
+          <div aria-hidden="true" className="text-[10px] font-digital text-icom-text-dim">CHANNELS</div>
+          <div role="status" className="text-sm font-digital text-icom-green">
+            {channelMode ? `Канал ${channel}` : 'Обычная настройка'}
+          </div>
+        </div>
+        <button
+          aria-label="Режим каналов"
+          aria-pressed={channelMode}
+          onClick={() => serial?.toggleChannelMode()}
+          disabled={!connected}
+          className={`px-4 py-2 rounded font-digital text-sm border transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+            channelMode
+              ? 'bg-icom-green/20 border-icom-green text-icom-green'
+              : 'bg-icom-accent/20 border-icom-accent text-icom-accent hover:bg-icom-accent/30'
+          }`}
+        >
+          {channelMode ? 'ВКЛ' : 'ВЫКЛ'}
+        </button>
+      </div>
+
       {/* Frequency Control Section */}
       <div className="bg-icom-panel rounded-lg p-3 sm:p-4 border border-icom-accent/30">
         <div className="text-center mb-3">

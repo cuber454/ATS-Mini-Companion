@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import Modal from './Modal';
 
 export default function Display({ data, connected, serial }) {
   const [isEditing, setIsEditing] = useState(false);
   const [inputFreq, setInputFreq] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessage, setModalMessage] = useState({ title: '', message: '' });
 
   const formatFrequency = (freq) => {
     if (!freq) return '000.000';
@@ -57,48 +54,20 @@ export default function Display({ data, connected, serial }) {
   const handleFrequencySubmit = () => {
     if (!connected || !inputFreq) return;
 
-    let targetFreqHz;
-    if (data.band === 'VHF' || data.band === 'FM') {
-      targetFreqHz = parseFloat(inputFreq) * 1000000; // Convert MHz to Hz
-    } else {
-      targetFreqHz = parseFloat(inputFreq) * 1000; // Convert kHz to Hz
-    }
-
-    const currentFreqHz = data.frequency;
-    const diff = targetFreqHz - currentFreqHz;
-
-    // Parse step from data (e.g., "100k" -> 100, "1k" -> 1, "10k" -> 10)
-    let stepKHz = 10; // default
-    if (data.step) {
-      const stepMatch = data.step.toString().match(/(\d+)k?/i);
-      if (stepMatch) {
-        stepKHz = parseInt(stepMatch[1]);
-      }
-    }
-
-    const steps = Math.round(diff / stepKHz);
-
-    // Limit to reasonable number of steps
-    if (Math.abs(steps) > 1000) {
-      setModalMessage({
-        title: 'Error: Too Many Steps',
-        message: `Se requieren ${Math.abs(steps)} pasos para alcanzar la frecuencia. Intenta con una frecuencia más cercana o cambia el tamaño del paso.`
-      });
-      setModalOpen(true);
+    // Accept both "7.529" and "7,529"
+    const value = parseFloat(inputFreq.replace(',', '.'));
+    if (!value || value <= 0) {
       setIsEditing(false);
       return;
     }
 
-    // Send multiple up/down commands to reach target
-    if (steps > 0) {
-      for (let i = 0; i < Math.abs(steps); i++) {
-        setTimeout(() => serial?.rotateUp(), i * 30);
-      }
-    } else if (steps < 0) {
-      for (let i = 0; i < Math.abs(steps); i++) {
-        setTimeout(() => serial?.rotateDown(), i * 30);
-      }
-    }
+    const targetFreqHz = (data.band === 'VHF' || data.band === 'FM')
+      ? value * 1000000 // MHz to Hz
+      : value * 1000;   // kHz to Hz
+
+    // One command instead of one per tuning step: stepping to a distant
+    // frequency took hundreds of commands and stopped working past a limit
+    serial?.setFrequencyTo(targetFreqHz, data.mode);
 
     setIsEditing(false);
   };
@@ -167,6 +136,13 @@ export default function Display({ data, connected, serial }) {
           </div>
         )}
       </div>
+
+      {/* Channel mode: the receiver is playing saved channels */}
+      {data.channelMode && (
+        <div role="status" className="mb-2 text-center text-xs sm:text-sm font-digital text-icom-green">
+          Канал {data.channel}
+        </div>
+      )}
 
       {/* Signal Meters - Professional Style */}
       <div className="space-y-2">
@@ -271,14 +247,6 @@ export default function Display({ data, connected, serial }) {
           NOT CONNECTED
         </div>
       )}
-
-      {/* Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={modalMessage.title}
-        message={modalMessage.message}
-      />
     </div>
   );
 }

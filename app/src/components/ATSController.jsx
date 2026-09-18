@@ -2,8 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { SerialConnection } from '../lib/SerialConnection';
 import Display from './Display';
 import RadioControl from './RadioControl';
+import ScanPanel from './ScanPanel';
 import MemoryPanel from './MemoryPanel';
 import DebugConsole from './DebugConsole';
+
+// Messages the firmware sends in English, shown to the user in Russian
+const NOTICES = {
+  'Frequency is outside the current band': 'Частота вне текущего диапазона',
+  'Invalid frequency': 'Неверная частота',
+  'no-channels': 'Ни одного канала не сохранено — сначала заполни память',
+};
 
 export default function ATSController() {
   const serialRef = useRef(null);
@@ -30,6 +38,7 @@ export default function ATSController() {
   const [error, setError] = useState(null);
   const [rawData, setRawData] = useState([]);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [scan, setScan] = useState({ running: false, stations: [], found: null });
 
   useEffect(() => {
     // Initialize serial connection
@@ -44,6 +53,26 @@ export default function ATSController() {
     serialRef.current.onRawData((data) => {
       const timestamp = new Date().toLocaleTimeString();
       setRawData(prev => [...prev.slice(-100), { time: timestamp, data }]);
+    });
+
+    serialRef.current.onScanData((event) => {
+      setScan((prev) => {
+        switch (event.type) {
+          case 'start':
+            return { running: true, stations: [], found: null };
+          case 'station':
+            return { ...prev, stations: [...prev.stations, event] };
+          case 'end':
+            return { ...prev, running: false, found: event.count };
+          default:
+            return prev;
+        }
+      });
+    });
+
+    serialRef.current.onNotice((notice) => {
+      setError(NOTICES[notice.text] || notice.text);
+      setTimeout(() => setError(null), 5000);
     });
 
     serialRef.current.onError((err) => {
@@ -61,6 +90,21 @@ export default function ATSController() {
       }
     };
   }, []);
+
+  // A scan that never reports back must not leave the button stuck
+  useEffect(() => {
+    if (!scan.running) return;
+    const timer = setTimeout(() => {
+      setScan((prev) => ({ ...prev, running: false, found: null }));
+    }, 60000);
+    return () => clearTimeout(timer);
+  }, [scan.running]);
+
+  const handleScan = () => {
+    if (!connected) return;
+    setScan({ running: true, stations: [], found: null });
+    serialRef.current?.scanBand();
+  };
 
   const handleConnect = async () => {
     if (!SerialConnection.isSupported()) {
@@ -163,6 +207,13 @@ export default function ATSController() {
           </button>
         </div>
 
+        {/* Errors and firmware messages, shown on every tab */}
+        {error && (
+          <div role="alert" className="mb-2 flex-shrink-0 bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'connect' && (
@@ -194,12 +245,6 @@ export default function ATSController() {
                 >
                   {connected ? 'DISCONNECT' : 'CONNECT TO ATS MINI'}
                 </button>
-
-                {error && (
-                  <div role="alert" className="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded text-sm">
-                    {error}
-                  </div>
-                )}
 
                 {connected && lastUpdate && (
                   <div role="status" className="text-center text-sm text-icom-green border-t border-icom-accent/20 pt-4">
@@ -236,6 +281,17 @@ export default function ATSController() {
                 volume={monitorData.volume}
                 agc={monitorData.agc}
                 sleep={monitorData.sleep}
+                channelMode={monitorData.channelMode}
+                channel={monitorData.channel}
+              />
+
+              {/* Band scan */}
+              <ScanPanel
+                serial={serialRef.current}
+                connected={connected}
+                scan={scan}
+                mode={monitorData.mode}
+                onScan={handleScan}
               />
             </div>
           )}
