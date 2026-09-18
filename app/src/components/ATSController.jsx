@@ -130,7 +130,7 @@ export default function ATSController() {
     }
 
     if (transport === 'ble' && !(await BleConnection.isSupported())) {
-      setError('Bluetooth на телефоне выключен или недоступен.');
+      setError('Bluetooth выключен или приложению не разрешён доступ к нему.');
       return;
     }
 
@@ -143,8 +143,13 @@ export default function ATSController() {
         }, 1000);
       }
     } catch (err) {
+      // "No device found" means the search finished with an empty list, which is
+      // a different problem from a connection that failed partway — say which.
+      const notFound = String(err?.message || err).toLowerCase().includes('no device found');
       setError(transport === 'ble'
-        ? 'Не удалось подключиться по Bluetooth. Проверь, что приёмник включён и Bluetooth в нём не выключен в меню.'
+        ? (notFound
+          ? 'Приёмник не найден. Проверь, что он включён и Bluetooth в нём не выключен в меню.'
+          : 'Не удалось подключиться по Bluetooth. Проверь, что приёмник включён и Bluetooth в нём не выключен в меню.')
         : 'Не удалось подключиться по кабелю.');
       console.error('[ATS Mini] Connect error:', err);
     }

@@ -13,6 +13,15 @@ const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // receiver -> phone
 // The firmware advertises itself under this name (RECEIVER_NAME)
 const DEVICE_NAME_PREFIX = 'ATS-Mini';
 
+// The plugin shows its own device list while it scans, so these strings have to
+// be Russian as well — a screen reader would otherwise read them in English.
+const DISPLAY_STRINGS = {
+  scanning: 'Идёт поиск…',
+  cancel: 'Отмена',
+  availableDevices: 'Найденные устройства',
+  noDeviceFound: 'Ничего не найдено',
+};
+
 export class BleConnection extends SerialConnection {
   constructor() {
     super();
@@ -20,20 +29,35 @@ export class BleConnection extends SerialConnection {
     this.isBle = true;
   }
 
+  /**
+   * Ask Android for the runtime permissions and build the adapter inside the
+   * plugin. initialize() has to come first: until it has run, every other call —
+   * isEnabled() included — is rejected with "Bluetooth LE not initialized.",
+   * which is easy to mistake for Bluetooth being switched off.
+   */
+  static async prepare() {
+    await BleClient.initialize({ androidNeverForLocation: true });
+    await BleClient.setDisplayStrings(DISPLAY_STRINGS);
+  }
+
+  /** True when the phone's Bluetooth is on and usable by the app. */
   static async isSupported() {
     try {
+      await BleConnection.prepare();
       return await BleClient.isEnabled();
-    } catch {
+    } catch (error) {
+      console.error('[BLE] Bluetooth is not ready:', error);
       return false;
     }
   }
 
   /**
-   * Ask the system for a device and connect to it. The picker is the standard
-   * Android one, so a screen reader can read it.
+   * Ask the system for a device and connect to it. The list of found devices is
+   * a native Android dialog, so a screen reader reads it — the strings in it are
+   * ours (see DISPLAY_STRINGS), which is why they are set up front.
    */
   async connect() {
-    await BleClient.initialize({ androidNeverForLocation: true });
+    await BleConnection.prepare();
 
     const device = await BleClient.requestDevice({
       namePrefix: DEVICE_NAME_PREFIX,
