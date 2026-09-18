@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { SerialConnection } from '../lib/SerialConnection';
+import { BleConnection } from '../lib/BleConnection';
 import Display from './Display';
 import RadioControl from './RadioControl';
 import ScanPanel from './ScanPanel';
@@ -14,7 +16,12 @@ const NOTICES = {
 };
 
 export default function ATSController() {
-  const serialRef = useRef(null);
+  // Bluetooth is the way the receiver is normally reached on a phone, so it is
+  // the default there; in a desktop browser the cable is the realistic option.
+  const [transport, setTransport] = useState(() =>
+    Capacitor?.getPlatform?.() === 'android' ? 'ble' : 'usb'
+  );
+  const [serial, setSerial] = useState(null);
   const [connected, setConnected] = useState(false);
   const [baudRate, setBaudRate] = useState(115200);
   const [activeTab, setActiveTab] = useState('radio');
@@ -42,21 +49,21 @@ export default function ATSController() {
   const [scan, setScan] = useState({ state: 'idle', stations: [], found: null });
 
   useEffect(() => {
-    // Initialize serial connection
-    serialRef.current = new SerialConnection();
+    // Each transport is its own client; switching rebuilds it
+    const client = transport === 'ble' ? new BleConnection() : new SerialConnection();
 
     // Setup callbacks
-    serialRef.current.onMonitorData((data) => {
+    client.onMonitorData((data) => {
       setMonitorData(data);
       setLastUpdate(new Date().toLocaleTimeString());
     });
 
-    serialRef.current.onRawData((data) => {
+    client.onRawData((data) => {
       const timestamp = new Date().toLocaleTimeString();
       setRawData(prev => [...prev.slice(-100), { time: timestamp, data }]);
     });
 
-    serialRef.current.onScanData((event) => {
+    client.onScanData((event) => {
       setScan((prev) => {
         switch (event.type) {
           case 'start':
@@ -71,26 +78,28 @@ export default function ATSController() {
       });
     });
 
-    serialRef.current.onNotice((notice) => {
+    client.onNotice((notice) => {
       setError(NOTICES[notice.text] || notice.text);
       setTimeout(() => setError(null), 5000);
     });
 
-    serialRef.current.onError((err) => {
+    client.onError((err) => {
       setError(err.message);
       setTimeout(() => setError(null), 5000);
     });
 
-    serialRef.current.onConnectionChange((status) => {
+    client.onConnectionChange((status) => {
       setConnected(status);
     });
 
+    setSerial(client);
+
     return () => {
-      if (serialRef.current && serialRef.current.connected) {
-        serialRef.current.disconnect();
+      if (client.connected) {
+        client.disconnect();
       }
     };
-  }, []);
+  }, [transport]);
 
   // A scan that never reports back must not leave the button stuck
   useEffect(() => {
@@ -104,25 +113,40 @@ export default function ATSController() {
   const handleScan = () => {
     if (!connected) return;
     setScan({ state: 'running', stations: [], found: null });
-    serialRef.current?.scanBand();
+    serial?.scanBand();
   };
 
   const handleConnect = async () => {
-    if (!SerialConnection.isSupported()) {
-      setError('Web Serial API not supported in this browser. Use Chrome or Edge.');
+    if (!serial) return;
+
+    if (connected) {
+      await serial.disconnect();
       return;
     }
 
-    if (connected) {
-      await serialRef.current.disconnect();
-    } else {
-      const success = await serialRef.current.connect(baudRate);
+    if (transport === 'usb' && !SerialConnection.isSupported()) {
+      setError('Веб-версия Serial API недоступна. Нужен Chrome или Edge.');
+      return;
+    }
+
+    if (transport === 'ble' && !(await BleConnection.isSupported())) {
+      setError('Bluetooth на телефоне выключен или недоступен.');
+      return;
+    }
+
+    try {
+      const success = await (transport === 'ble' ? serial.connect() : serial.connect(baudRate));
       if (success) {
-        // Enable monitor mode
+        // Enable monitor mode — the same line the USB path uses
         setTimeout(() => {
-          serialRef.current.toggleMonitor();
+          serial.toggleMonitor();
         }, 1000);
       }
+    } catch (err) {
+      setError(transport === 'ble'
+        ? 'Не удалось подключиться по Bluetooth. Проверь, что приёмник включён и Bluetooth в нём не выключен в меню.'
+        : 'Не удалось подключиться по кабелю.');
+      console.error('[ATS Mini] Connect error:', err);
     }
   };
 
@@ -223,20 +247,60 @@ export default function ATSController() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-icom-text-dim font-digital mb-2">Baud Rate</label>
-                  <select
-                    aria-label="Скорость порта"
-                    value={baudRate}
-                    onChange={(e) => setBaudRate(Number(e.target.value))}
-                    disabled={connected}
-                    className="w-full bg-icom-display text-icom-text px-4 py-3 rounded text-sm border border-icom-accent-dim focus:border-icom-accent focus:outline-none disabled:opacity-50"
-                  >
-                    <option value={9600}>9600 baud</option>
-                    <option value={115200}>115200 baud</option>
-                  </select>
+                  <div className="block text-sm text-icom-text-dim font-digital mb-2">Способ подключения</div>
+                  <div role="group" aria-label="Способ подключения" className="grid grid-cols-2 gap-2">
+                    <button
+                      aria-label="Подключение по Bluetooth"
+                      aria-pressed={transport === 'ble'}
+                      onClick={() => setTransport('ble')}
+                      disabled={connected}
+                      className={`px-4 py-3 rounded font-digital text-sm border transition-all disabled:opacity-50 ${
+                        transport === 'ble'
+                          ? 'bg-icom-accent text-icom-bg border-icom-accent'
+                          : 'bg-icom-panel text-icom-text border border-icom-accent/30 hover:bg-icom-accent/20'
+                      }`}
+                    >
+                      BLUETOOTH
+                    </button>
+                    <button
+                      aria-label="Подключение по кабелю"
+                      aria-pressed={transport === 'usb'}
+                      onClick={() => setTransport('usb')}
+                      disabled={connected}
+                      className={`px-4 py-3 rounded font-digital text-sm border transition-all disabled:opacity-50 ${
+                        transport === 'usb'
+                          ? 'bg-icom-accent text-icom-bg border-icom-accent'
+                          : 'bg-icom-panel text-icom-text border border-icom-accent/30 hover:bg-icom-accent/20'
+                      }`}
+                    >
+                      КАБЕЛЬ
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-icom-text-dim font-digital">
+                    {transport === 'ble'
+                      ? 'Приёмник виден как ATS-Mini. Bluetooth в нём должен быть включён.'
+                      : 'Нужен кабель USB и Chrome или Edge.'}
+                  </p>
                 </div>
 
+                {transport === 'usb' && (
+                  <div>
+                    <label className="block text-sm text-icom-text-dim font-digital mb-2">Baud Rate</label>
+                    <select
+                      aria-label="Скорость порта"
+                      value={baudRate}
+                      onChange={(e) => setBaudRate(Number(e.target.value))}
+                      disabled={connected}
+                      className="w-full bg-icom-display text-icom-text px-4 py-3 rounded text-sm border border-icom-accent-dim focus:border-icom-accent focus:outline-none disabled:opacity-50"
+                    >
+                      <option value={9600}>9600 baud</option>
+                      <option value={115200}>115200 baud</option>
+                    </select>
+                  </div>
+                )}
+
                 <button
+                  aria-label={connected ? 'Отключиться от приёмника' : 'Подключиться к приёмнику'}
                   onClick={handleConnect}
                   className={`w-full px-6 py-3 rounded font-semibold text-base transition-all ${
                     connected
@@ -256,9 +320,9 @@ export default function ATSController() {
                 <div className="bg-icom-display/30 rounded p-4 text-sm text-icom-text-dim border border-icom-accent/20">
                   <p className="font-digital mb-2">ℹ️ Requirements:</p>
                   <ul className="list-disc ml-5 space-y-1">
-                    <li>Chrome or Edge browser (Web Serial API)</li>
-                    <li>ATS Mini connected via USB</li>
-                    <li>Correct baud rate selected (usually 115200)</li>
+                    <li>Bluetooth: receiver switched on, Bluetooth enabled in its menu, visible as ATS-Mini</li>
+                    <li>Cable: Chrome or Edge browser (Web Serial API), receiver connected via USB</li>
+                    <li>Cable: correct baud rate selected (usually 115200)</li>
                   </ul>
                 </div>
               </div>
@@ -268,11 +332,11 @@ export default function ATSController() {
           {activeTab === 'radio' && (
             <div className="space-y-2 h-full">
               {/* Display */}
-              <Display data={monitorData} connected={connected} serial={serialRef.current} />
+              <Display data={monitorData} connected={connected} serial={serial} />
 
               {/* Radio Control */}
               <RadioControl
-                serial={serialRef.current}
+                serial={serial}
                 connected={connected}
                 frequency={monitorData.frequency}
                 currentBand={monitorData.band}
@@ -289,7 +353,7 @@ export default function ATSController() {
 
               {/* Band scan */}
               <ScanPanel
-                serial={serialRef.current}
+                serial={serial}
                 connected={connected}
                 scan={scan}
                 mode={monitorData.mode}
@@ -301,7 +365,7 @@ export default function ATSController() {
 
           {activeTab === 'memory' && (
             <MemoryPanel
-              serial={serialRef.current}
+              serial={serial}
               connected={connected}
               currentMemory={monitorData.memory}
               frequency={monitorData.frequency}
@@ -311,7 +375,7 @@ export default function ATSController() {
           )}
 
           {activeTab === 'debug' && (
-            <DebugConsole serial={serialRef.current} connected={connected} rawData={rawData} />
+            <DebugConsole serial={serial} connected={connected} rawData={rawData} />
           )}
 
           {activeTab === 'about' && (
