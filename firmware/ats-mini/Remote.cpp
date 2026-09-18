@@ -468,7 +468,8 @@ int remoteDoCommand(char key)
       // The scan runs to completion and blocks the main loop while it does,
       // so the remote only gets the "begin" line before it starts
       currentCmd = CMD_SCAN;
-      Serial.println("SCAN,START");
+      Serial.print("SCAN,START\r\n");
+      blePrint("SCAN,START\r\n");
       clickScan(true);
       scanReportStations();
       currentCmd = CMD_NONE;

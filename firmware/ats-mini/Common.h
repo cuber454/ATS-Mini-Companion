@@ -14,7 +14,7 @@
 #define AUTHORS_LINE3  "Goshante, G8PTN (Dave), R9UCL (Max Arnold),"
 #define AUTHORS_LINE4  "Marat Fayzullin"
 
-#define VER_APP        234  // Firmware version
+#define VER_APP        235  // Firmware version (235: scan report over Bluetooth)
 #define VER_SETTINGS   72   // Settings version (72: Bluetooth on by default)
 #define VER_MEMORIES   71   // Memories version
 #define VER_BANDS      72   // Bands version
@@ -216,6 +216,9 @@ int8_t getBleStatus();
 void bleTickTime();
 void blePrintStatus();
 void bleToggleMonitor();
+
+// Send a line of text to the Bluetooth link, if it is up and connected
+void blePrint(const char *text);
 
 // Remote.c
 #define REMOTE_CHANGED   1

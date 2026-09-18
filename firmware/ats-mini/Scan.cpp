@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "Utils.h"
 #include "Menu.h"
+#include "Ble.h"
 
 // Tuning delays after rx.setFrequency()
 #define TUNE_DELAY_DEFAULT 30
@@ -131,8 +132,29 @@ static bool scanTickTime()
   // Save last scan time
   scanTime = millis() - SCAN_POLL_TIME;
 
+  // Let the Bluetooth stack and the idle task breathe: the scan takes tens of
+  // seconds and the main loop is stuck inside it the whole time.
+  yield();
+
   // Return current scan status
   return(scanStatus==SCAN_RUN);
+}
+
+//
+// Send one line of the scan report to both links: the scan can be asked for
+// over the cable or over Bluetooth, and the answer has to go back the same way.
+//
+static void scanReport(const char *fmt, ...)
+{
+  char reportBuffer[96];
+
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(reportBuffer, sizeof(reportBuffer), fmt, args);
+  va_end(args);
+
+  Serial.print(reportBuffer);
+  blePrint(reportBuffer);
 }
 
 //
@@ -146,16 +168,16 @@ void scanReportStations()
 {
   if(scanStatus != SCAN_DONE)
   {
-    Serial.println("SCAN,END,0");
+    scanReport("SCAN,END,0\r\n");
     return;
   }
 
-  Serial.printf("SCAN,BEGIN,%u,%u\r\n", scanStep, scanStartFreq);
+  scanReport("SCAN,BEGIN,%u,%u\r\n", scanStep, scanStartFreq);
 
   // A flat band means there is nothing to report: no signal stands out
   if(scanMaxRSSI <= scanMinRSSI + 2)
   {
-    Serial.println("SCAN,END,0");
+    scanReport("SCAN,END,0\r\n");
     return;
   }
 
@@ -200,9 +222,9 @@ void scanReportStations()
   }
 
   for(uint8_t i=0 ; i<count ; i++)
-    Serial.printf("SCAN,F,%u,%u,%u\r\n", freqs[i], rssis[i], snrs[i]);
+    scanReport("SCAN,F,%u,%u,%u\r\n", freqs[i], rssis[i], snrs[i]);
 
-  Serial.printf("SCAN,END,%u\r\n", count);
+  scanReport("SCAN,END,%u\r\n", count);
 }
 
 //

@@ -1,3 +1,5 @@
+#include <esp_system.h>
+
 #include "Common.h"
 #include "Themes.h"
 #include "Menu.h"
@@ -63,6 +65,23 @@ int bleDoCommand(uint8_t bleMode)
 //
 void bleTickTime()
 {
+  // The reason the receiver restarted matters when it restarts on its own, and
+  // the only voice it has is the app: say it once, right after the app connects.
+  static int8_t lastStatus = 0;
+  int8_t status = getBleStatus();
+  if((status == 1) && (lastStatus != 1))
+  {
+    esp_reset_reason_t reason = esp_reset_reason();
+    if((reason != ESP_RST_POWERON) && (reason != ESP_RST_EXT))
+    {
+      char reasonBuffer[96];
+      snprintf(reasonBuffer, sizeof(reasonBuffer),
+        "Error:Приёмник перезапустился: %s\r\n", resetReasonText(reason));
+      blePrint(reasonBuffer);
+    }
+  }
+  lastStatus = status;
+
   if(bleRemoteLogOn && (millis() - bleRemoteTimer >= 500))
   {
     // Mark time and increment diagnostic sequence number
@@ -128,4 +147,36 @@ void blePrintStatus()
 void bleToggleMonitor()
 {
   bleRemoteLogOn = !bleRemoteLogOn;
+}
+
+//
+// Send a line of text to Bluetooth, if it is up and something is listening
+//
+void blePrint(const char *text)
+{
+  if(!BLESerial.isStarted()) return;
+  if(BLEDevice::getServer()->getConnectedCount() == 0) return;
+
+  BLESerial.write((uint8_t*)text, strlen(text));
+}
+
+//
+// Why the last restart happened, in words rather than in a number
+//
+static const char *resetReasonText(esp_reset_reason_t reason)
+{
+  switch(reason)
+  {
+    case ESP_RST_POWERON:   return "включение питания";
+    case ESP_RST_EXT:       return "сброс кнопкой";
+    case ESP_RST_SW:        return "программный сброс";
+    case ESP_RST_PANIC:     return "сбой прошивки";
+    case ESP_RST_INT_WDT:   return "сторожевой таймер прерываний";
+    case ESP_RST_TASK_WDT:  return "сторожевой таймер задачи";
+    case ESP_RST_WDT:       return "сторожевой таймер";
+    case ESP_RST_BROWNOUT:  return "просадка питания";
+    case ESP_RST_DEEPSLEEP: return "выход из сна";
+    case ESP_RST_SDIO:      return "сброс по SDIO";
+    default:                return "неизвестная причина";
+  }
 }
